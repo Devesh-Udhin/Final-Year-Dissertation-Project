@@ -8,47 +8,7 @@ from datetime import date
 from google.cloud import firestore as gc_firestore
 from django.contrib.auth import logout
 
-# Get the current user logged in
-caller = None
-
-def TicketList(request):
-     
-     ticketLists = firestore.DisplayTicket(request.session['user_email'])
-     
-     return render(request, 'base/ticket_list.html', {'ticketLists':ticketLists})
-
-def TechDashboard(request):
-
-     techDisctionary = {
-          "tech0@gmail.com": 'Technician GRP 0',
-          "tech1@gmail.com": 'Technician GRP 1',
-          "tech2@gmail.com": 'Technician GRP 2',
-          "tech3@gmail.com": 'Technician GRP 3',
-          "tech4@gmail.com": 'Technician GRP 4',
-          "tech5@gmail.com": 'Technician GRP 5',
-     }
-
-     techAssignedTickets = firestore.GetTechTickets(request.session['user_email'])
-     
-     return render(request, 'base/tech_dashboard.html', {'techAssignedTickets': techAssignedTickets, 'cuurentTech': techDisctionary[request.session['user_email']]})
-
-def TechDashboardDetails(request, ticketID):
-     if request.method == 'GET':
-          button_action = request.GET.get('button_action')
-     
-          if button_action == 'back':
-               return redirect('/tech_dashboard/')
-          elif button_action == 'resolve':
-               ticket = firestore.GetTicket(ticketID)
-               firestore.UpdateResolvedTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Resolved", ticket['TechAssigned'], ticket['Date'])
-               firestore.DeleteResolvedTickets(ticketID)
-               return redirect('/tech_dashboard/')
-     
-     ticketDetails = firestore.DisplayTicketDetails(ticketID)
-     techLists = firestore.GetTechList()
-     ticketDetail = {'ticketDetail': ticketDetails, 'techLists': techLists}
-     
-     return render(request, 'base/tech_dashboard_details.html', ticketDetail)
+# =============================================Start Login=======================================================
 
 def Login(request):
      global caller
@@ -83,6 +43,21 @@ def Login(request):
           
      return render(request, 'base/login.html')
 
+# =============================================End Login=========================================================
+
+# >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>Start User's Side<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+# =============================================Start User's Pending Tickets list=================================
+
+def TicketList(request):
+     
+     ticketLists = firestore.DisplayTicket(request.session['user_email'])
+     
+     return render(request, 'base/ticket_list.html', {'ticketLists':ticketLists})
+
+# =============================================End User's Pending Tickets list===================================
+
+# =============================================Start User's Create Ticket======================================
 # load model
 model_path = os.path.join(os.path.dirname(__file__), 'model.h5')
 model = keras.models.load_model(model_path)
@@ -101,20 +76,18 @@ def CreateTicket(request):
                return render(request, 'base/create_ticket.html')
           else: 
                preProcessDescription = data_preprocessing.pre_process_data(description)
-               # print("pre processed description: ", preProcessDescription)
                
                empty_list_of_lists = []
                empty_list_of_lists.append(preProcessDescription)
                
                vectorized_desc = data_preprocessing.getData(empty_list_of_lists)
-               # print("vectorized description: ", vectorized_desc)
 
                pred = model.predict(vectorized_desc)
                # df_pred = pd.DataFrame(pred, columns=['tech1', 'tech2', 'tech3', 'tech4', 'tech5', 'tech6', 'tech7', 'tech8'])
                pred = [i.argmax() for i in pred]
 
                tech = pred[0]
-               tech = str(tech)
+               tech = "tech" + str(tech) + "@gmail.com"
                
                read()
                
@@ -127,9 +100,15 @@ def CreateTicket(request):
      
                firestore.CreateTicket(ticketID, title, description, timestamp, status, tech, caller)
                
+               firestore.UpdateActiveCount(tech, "increment")
+               
                write()
      
      return render(request, 'base/create_ticket.html')
+
+# =============================================End User's Create Ticket======================================
+
+# =============================================Start User's Resolve Ticket===================================
 
 def Resolve(request):
      
@@ -139,25 +118,258 @@ def Resolve(request):
 
 def ResolveDetails(request, ticketID):
      
-     if request.method == 'GET':     
-          return redirect('/resolve/')
+     if request.method == 'POST':
+          button_action = request.POST.get('button_action')
+          
+          if(button_action == 'back'):
+               return redirect('/resolve/')
+          
+          elif(button_action == 're-send'):
+               
+               UserComment = request.POST.get('comment')
+               ticket = firestore.GetResolvedTicket(ticketID)
+               
+               firestore.UpdateReturnedTable(ticketID, ticket['Caller'], ticket['Title'], ticket['Description'], ticket['TechResolved'], ticket['DateCreated'], ticket['Comments'], UserComment)
+               firestore.DeleteResolvedTickets(ticketID)
+               return redirect('/resolve/')
+               
      
-     ticketDetails = firestore.DisplayAllTicketFeedback(ticketID)
+     ticketDetails = firestore.GetResolvedTicket(ticketID)
      
      return render(request, 'base/resolve_details.html', {'ticketDetails':ticketDetails})
 
+# =============================================End User's Resolve Ticket=====================================
+
+# ========================================Start User's Attention Required Ticket=============================
+
+def AttentionRequired(request):
+     
+     ticketLists = firestore.DisplayAttentionRequiredTicket(request.session['user_email'])
+     
+     return render(request, 'base/attention_required.html', {'ticketLists':ticketLists})
+
+def AttentionRequiredDetails(request, ticketID):
+     
+     if request.method == 'POST':
+          button_action = request.POST.get('button_action')
+          
+          if(button_action == 'back'):
+               return redirect('/attention_required/')
+          
+          elif(button_action == 'respond'):
+               UserComment = request.POST.get('responce')
+               ticket = firestore.DisplayAllAttentionRequiredTicket(ticketID)
+               #=====================================================================================================================================================================
+               firestore.UpdateReturnedTable(ticketID, ticket['Caller'], ticket['Title'], ticket['Description'], ticket['TechResolved'], ticket['DateCreated'], ticket['TechComment'], UserComment)
+               firestore.DeleteAtentionRequiredTickets(ticketID)
+               return redirect('/attention_required/')
+          
+     
+     ticketDetails = firestore.DisplayAllAttentionRequiredTicket(ticketID)
+     
+     return render(request, 'base/attention_required_details.html', {'ticketDetails':ticketDetails})
+
+# ========================================End User's Attention Required Ticket====================================
+
+# >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>End User's Side<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+# >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>Start Technicians's Side<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+# =============================================Start Tech Dashboard================================================
+
+def TechDashboard(request):
+
+     techAssignedTickets = firestore.GetTechTickets(request.session['user_email'])
+     
+     return render(request, 'base/tech_dashboard.html', {'techAssignedTickets': techAssignedTickets, 'cuurentTech': techDisctionary[request.session['user_email']]})
+
+def TechDashboardDetails(request, ticketID):
+     if request.method == 'POST':
+          button_action = request.POST.get('button_action')
+     
+          if button_action == 'back':
+               return redirect('/tech_dashboard/')
+          
+          elif button_action == 'resolve':
+               how_ticket_was_resolve = request.POST.get('how_ticket_was_resolve')
+               comment = request.POST.get('comment')
+               ticket = firestore.DisplayTicketDetails(ticketID)
+               firestore.UpdateResolvedTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Resolved", ticket['TechAssigned'], ticket['Date'], comment, how_ticket_was_resolve)
+               
+               firestore.DeleteTickets(ticketID) 
+               # update active count
+               firestore.UpdateActiveCount(ticket['TechAssigned'], "decrement")
+               # update resolve count
+               firestore.UpdateResolveCount(ticket['TechAssigned'], "increment")
+               
+               return redirect('/tech_dashboard/')
+          
+          elif button_action == 'transfer':
+               TechComment = request.POST.get('TechComment')
+               TechEscalatedTo = request.POST.get('selected_technician')
+               ticket = firestore.DisplayTicketDetails(ticketID)
+               firestore.UpdateEscalatedTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Escalated", ticket['TechAssigned'], TechEscalatedTo, ticket['Date'], TechComment)
+               
+               return redirect('/tech_dashboard/')
+               
+          elif button_action == 'auto_transfer':
+               
+               return redirect('/tech_dashboard/')
+          
+          elif button_action == 'request':
+               request_message = request.POST.get('request_message')
+               ticket = firestore.DisplayTicketDetails(ticketID)
+               firestore.UpdateAttentionRequiredTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Attention_Required", ticket['TechAssigned'], ticket['Date'], request_message)
+               firestore.DeleteTickets(ticketID)
+               
+               return redirect('/tech_dashboard/')
+     
+     ticketDetails = firestore.DisplayTicketDetails(ticketID)
+     techLists = firestore.GetTechList()
+     ticketDetail = {'ticketDetail': ticketDetails, 'techLists': techLists}
+     
+     return render(request, 'base/tech_dashboard_details.html', ticketDetail)
+
+# =============================================End Tech Dashboard================================================
+
+# ========================================Start Tech's Resolved Ticket===========================================
 def TechResolvedTickets(request):
      
      currentTech = request.session['user_email']
      
-     TechNumber = ''.join(filter(str.isdigit, currentTech))
+     # isdigit id used to check if a string is a number
+     # TechNumber = ''.join(filter(str.isdigit, currentTech))
      
-     ticketDetails = firestore.DisplayTechResolvedTicket(TechNumber)
+     ticketDetails = firestore.DisplayTechResolvedTicket(currentTech)
      
-     return render(request, 'base/resolved_tickets.html', {'ticketDetails':ticketDetails})
+     return render(request, 'base/tech_resolved_tickets.html', {'ticketDetails':ticketDetails})
 
+def TechResolvedTicketsDetails(request, ticketID):
+     
+     if request.method == 'GET':
+          return redirect('/tech_resolved_tickets/')
+     
+     ticketDetails = firestore.GetResolvedTicket(ticketID)
+     
+     return render(request, 'base/tech_resolved_tickets_details.html', {'ticketDetails':ticketDetails})
 
+# ========================================End Tech's Resolved Ticket===============================================
 
+# ========================================Start Tech Escalated Tickets=============================================
+def TechEscalatedTicket(request):
+     
+     ticketLists = firestore.DisplayTechEscalatedTicket(request.session['user_email'])
+     
+     return render(request, 'base/escalated.html', {'ticketLists':ticketLists, 'cuurentTech': techDisctionary[request.session['user_email']]})
+
+def TechEscalatedTicketDetails(request, ticketID):
+          
+     if request.method == 'POST':
+          button_action = request.POST.get('button_action')
+
+          if button_action == 'back':
+               return redirect('/escalated/')
+
+          elif button_action == 'resolve':
+               how_ticket_was_resolve = request.POST.get('how_ticket_was_resolve')
+               comment = request.POST.get('comment')
+               ticket = firestore.GetEscalatedTicket(ticketID)
+               firestore.UpdateResolvedTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Resolved", ticket['TechTransferTo'], ticket['DateCreated'], comment, how_ticket_was_resolve)
+
+               firestore.DeleteEscalatedTickets(ticketID) 
+               # update active count
+               firestore.UpdateActiveCount(ticket['TechAssigned'], "decrement")
+               # update resolve count
+               firestore.UpdateResolveCount(ticket['TechAssigned'], "increment")
+
+               return redirect('/escalated/')
+
+          elif button_action == 'transfer':
+               TechComment = request.POST.get('TechComment')
+               TechEscalatedTo = request.POST.get('selected_technician')
+               ticket = firestore.GetEscalatedTicket(ticketID)
+               firestore.UpdateEscalatedTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Escalated", ticket['TechTransferTo'], TechEscalatedTo, ticket['DateCreated'], TechComment)
+
+               return redirect('/escalated/')
+
+          elif button_action == 'auto_transfer':
+
+               return redirect('/escalated/')
+
+          elif button_action == 'request':
+               request_message = request.POST.get('request_message')
+               ticket = firestore.GetEscalatedTicket(ticketID)
+               firestore.UpdateAttentionRequiredTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Attention_Required", ticket['TechTransferTo'], ticket['DateCreated'], request_message)
+               firestore.DeleteEscalatedTickets(ticketID)
+
+               return redirect('/escalated/')
+
+     
+     ticketDetails = firestore.GetEscalatedTicket(ticketID)
+     
+     return render(request, 'base/escalated_details.html', {'ticketDetails':ticketDetails})
+
+# ========================================End Tech Escalated Tickets=============================================
+
+# ========================================Start Tech's Returned Ticket===========================================
+def TechReturnedTicket(request):
+     
+     ticketLists = firestore.DisplayReturnedTicket(request.session['user_email'])
+     
+     return render(request, 'base/return.html', {'ticketLists':ticketLists, 'cuurentTech': techDisctionary[request.session['user_email']]})
+
+def TechReturnedTicketDetails(request, ticketID):
+          
+     if request.method == 'POST':
+          button_action = request.POST.get('button_action')
+
+          if button_action == 'back':
+               return redirect('/return/')
+
+          elif button_action == 'resolve':
+               how_ticket_was_resolve = request.POST.get('how_ticket_was_resolve')
+               comment = request.POST.get('comment')
+               ticket = firestore.DisplayTicketDetails(ticketID)
+               firestore.UpdateResolvedTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Resolved", ticket['TechAssigned'], ticket['Date'], comment, how_ticket_was_resolve)
+
+               firestore.DeleteReturnedTickets(ticketID) 
+               # update active count
+               firestore.UpdateActiveCount(ticket['TechAssigned'], "decrement")
+               # update resolve count
+               firestore.UpdateResolveCount(ticket['TechAssigned'], "increment")
+
+               return redirect('/return/')
+
+          elif button_action == 'transfer':
+               TechComment = request.POST.get('TechComment')
+               TechEscalatedTo = request.POST.get('selected_technician')
+               ticket = firestore.DisplayTicketDetails(ticketID)
+               firestore.UpdateEscalatedTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Escalated", ticket['TechAssigned'], TechEscalatedTo, ticket['Date'], TechComment)
+
+               return redirect('/return/')
+
+          elif button_action == 'auto_transfer':
+
+               return redirect('/return/')
+
+          elif button_action == 'request':
+               request_message = request.POST.get('request_message')
+               ticket = firestore.DisplayTicketDetails(ticketID)
+               firestore.UpdateAttentionRequiredTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Attention_Required", ticket['TechAssigned'], ticket['Date'], request_message)
+               firestore.DeleteReturnedTickets(ticketID)
+
+               return redirect('/return/')
+
+     
+     ticketDetails = firestore.DisplayAllReturnedTicket(ticketID)
+     
+     return render(request, 'base/return_details.html', {'ticketDetails':ticketDetails})
+
+# ========================================End Tech's Returned Ticket=======================================
+
+# >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>End Technicians's Side<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+caller = None
 ticketID = ''
 
 def read():
@@ -179,3 +391,25 @@ def write():
      file.write(str(new_value))
      # Close the file
      file.close()
+     
+techDisctionary = {
+     "tech0@gmail.com": 'Technician GRP 0',
+     "tech1@gmail.com": 'Technician GRP 1',
+     "tech2@gmail.com": 'Technician GRP 2',
+     "tech3@gmail.com": 'Technician GRP 3',
+     "tech4@gmail.com": 'Technician GRP 4',
+     "tech5@gmail.com": 'Technician GRP 5',
+     "tech6@gmail.com": 'Technician GRP 6',
+     "tech7@gmail.com": 'Technician GRP 7',
+}
+
+# 1. Create active ticket count for each technician ==============DONE============
+# 2. Increament and decrement active ticket count accordingly ========DONE============
+# 3. Update db for additional fields like comment etc ==============DONE============
+# 4. Create table for all resolved tickets and how it was resolved ==============DONE============
+# 5. Create table for all pending tickets ==============DONE============
+# 6. User can re-submit tickets if problem was not solved ==============DONE============
+# 7. Escalate tickets ***
+# 9. Notify technician when ticket is assigned to them
+# 10 Translation
+# 8. Create reporting tool for admin ***

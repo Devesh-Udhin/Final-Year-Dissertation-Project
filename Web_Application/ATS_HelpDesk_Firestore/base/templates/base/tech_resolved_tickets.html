@@ -1,8 +1,7 @@
-{% extends 'main.html' %}
+{% extends 'main_tech.html' %}
 {% block content %}
 
 <div id="ticket-list" class="form-container">
-     <h1>Resolved Tickets</h1>
      <table class="table table-hover table-dark table-striped">
           <thead>
             <tr>
@@ -14,14 +13,14 @@
             </tr>
           </thead>
           <tbody>
-            {% for ticketList in ticketLists %}
+            {% for ticketDetail in ticketDetails %}
                <tr>
-                 <td>{{ticketList.id}}</td>
-                 <td>{{ticketList.Title}}</td>
-                 <td>{{ticketList.Description}}</td>
-                 <td>{{ticketList.Status}}</td>
+                 <td>{{ticketDetail.id}}</td>
+                 <td>{{ticketDetail.Title}}</td>
+                 <td>{{ticketDetail.Description}}</td>
+                 <td>{{ticketDetail.Status}}</td>
                  <td>
-                    <form method="POST" action="details/{{ticketList.id}}">
+                    <form method="POST" action="details/{{ticketDetail.id}}">
                          {% csrf_token %}
                          <button type="submit" class="view-button">View</button>
                     </form>
