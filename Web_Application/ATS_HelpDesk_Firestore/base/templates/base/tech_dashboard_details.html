@@ -113,10 +113,6 @@
                      {% comment %} Manually Transfer {% endcomment %}
                      <input type="hidden" name="button_action" value="transfer">
                      <input type="submit" value="Transfer" class="btn btn-success">
-                     
-                     {% comment %} Auto Transfer {% endcomment %}
-                     <input type="hidden" name="button_action" value="auto_transfer">
-                     <input type="submit" value="Auto Transfer" class="btn btn-success">
                    </div>
                  </div>
                </div>
@@ -124,15 +120,54 @@
 
      </form>
 
-     {% comment %} Request Information Button {% endcomment %}
+     {% comment %} Transfer Button {% endcomment %}
      <form method="POST" class="button-form">
           {% csrf_token %}
+          <input type="hidden" name="button_action" value="transfer">
           <button type="button" class="btn btn-success" data-toggle="modal" data-target="#exampleModal3">
-               Request Information
+               Auto Transfer
           </button>
 
           <!-- Modal -->
           <div class="modal fade" id="exampleModal3" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+               <div class="modal-dialog" role="document">
+                 <div class="modal-content">
+                   <div class="modal-header">
+                     <h5 class="modal-title" id="exampleModalLabel">Transfer Ticket to another Technician</h5>
+                     <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                       <span aria-hidden="true">&times;</span>
+                     </button>
+                   </div>
+                   <form>
+                    <div class="form-group">
+                      <label for="comment" class="col-form-label">Comment:</label>
+                      <textarea class="form-control" name="TechComment" id="comment"></textarea>
+                    </div>
+                  </form>
+                   <div class="modal-footer">
+                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                     
+                     {% comment %} Auto Transfer {% endcomment %}
+                     <input type="hidden" name="button_action" value="auto_transfer">
+                     {% comment %} <input type="hidden" name="ticket_id" value={{ ticketDetail.id }}> {% endcomment %}
+                     
+                     <input type="submit" value="Auto Transfer" class="btn btn-success">
+                   </div>
+                 </div>
+               </div>
+          </div>
+
+     </form>
+     
+     {% comment %} Request Information Button {% endcomment %}
+     <form method="POST" class="button-form">
+          {% csrf_token %}
+          <button type="button" class="btn btn-success" data-toggle="modal" data-target="#exampleModal4">
+               Request Information
+          </button>
+
+          <!-- Modal -->
+          <div class="modal fade" id="exampleModal4" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
                <div class="modal-dialog" role="document">
                  <div class="modal-content">
                    <div class="modal-header">

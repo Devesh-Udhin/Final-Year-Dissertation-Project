@@ -2,6 +2,7 @@ from django.shortcuts import render, redirect
 from . import data_preprocessing
 import keras
 import pandas as pd
+import numpy as np
 import os
 from ATS_HelpDesk import views as firestore
 from datetime import date
@@ -83,26 +84,39 @@ def CreateTicket(request):
                vectorized_desc = data_preprocessing.getData(empty_list_of_lists)
 
                pred = model.predict(vectorized_desc)
-               # df_pred = pd.DataFrame(pred, columns=['tech1', 'tech2', 'tech3', 'tech4', 'tech5', 'tech6', 'tech7', 'tech8'])
-               pred = [i.argmax() for i in pred]
+               # df_pred = pd.DataFrame(pred, columns=['tech1@gmail.com', 'tech2@gmail.com', 'tech3@gmail.com', 'tech4@gmail.com', 'tech5@gmail.com', 'tech6@gmail.com', 'tech7@gmail.com', 'tech8@gmail.com'])
+               
+               final_pred = [i.argmax() for i in pred]
+               # tech = "tech" + str(final_pred[0]) + "@gmail.com"
 
-               tech = pred[0]
-               tech = "tech" + str(tech) + "@gmail.com"
+               # Use argsort to get the indices in descending order
+               indices_descending = np.argsort(pred[0])[::-1]
+
+               # Create a new list with "tech" before each index and "@gmail.com" after
+               prediction_list = ["tech" + str(index) + "@gmail.com" for index in indices_descending]
                
                read()
                
                todayDate = date.today()
                # Convert the date to a Firestore timestamp
                timestamp = gc_firestore.SERVER_TIMESTAMP if isinstance(todayDate, type(date.today())) else todayDate
-
                status = 'Pending'
                caller = request.session.get('user_email')
      
-               firestore.CreateTicket(ticketID, title, description, timestamp, status, tech, caller)
+               firestore.UpdateAllPredictionsTable(ticketID, prediction_list)
+               maxActiveCount = firestore.GetMaxActiveCount()
+               techActiveCountInRange = firestore.GetTechActiveCount(maxActiveCount['MaxCount'])
                
-               firestore.UpdateActiveCount(tech, "increment")
+               key_to_compare = "id"
                
-               write()
+               for i in prediction_list:
+                    for tech in techActiveCountInRange:
+                         if i == tech.get(key_to_compare):
+                              firestore.CreateTicket(ticketID, title, description, timestamp, status, tech, caller)
+                              firestore.UpdateActiveCount(tech, "increment")
+                              write()
+                              return render(request, 'base/create_ticket.html')
+               
      
      return render(request, 'base/create_ticket.html')
 
@@ -159,8 +173,7 @@ def AttentionRequiredDetails(request, ticketID):
           elif(button_action == 'respond'):
                UserComment = request.POST.get('responce')
                ticket = firestore.DisplayAllAttentionRequiredTicket(ticketID)
-               #=====================================================================================================================================================================
-               firestore.UpdateReturnedTable(ticketID, ticket['Caller'], ticket['Title'], ticket['Description'], ticket['TechResolved'], ticket['DateCreated'], ticket['TechComment'], UserComment)
+               firestore.UpdateReturnedTable(ticketID, ticket['Caller'], ticket['Title'], ticket['Description'], ticket['TechAssigned'], ticket['DateCreated'], ticket['TechComment'], UserComment)
                firestore.DeleteAtentionRequiredTickets(ticketID)
                return redirect('/attention_required/')
           
@@ -196,7 +209,7 @@ def TechDashboardDetails(request, ticketID):
                ticket = firestore.DisplayTicketDetails(ticketID)
                firestore.UpdateResolvedTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Resolved", ticket['TechAssigned'], ticket['Date'], comment, how_ticket_was_resolve)
                
-               firestore.DeleteTickets(ticketID) 
+               firestore.DeleteTickets(ticketID)
                # update active count
                firestore.UpdateActiveCount(ticket['TechAssigned'], "decrement")
                # update resolve count
@@ -209,11 +222,32 @@ def TechDashboardDetails(request, ticketID):
                TechEscalatedTo = request.POST.get('selected_technician')
                ticket = firestore.DisplayTicketDetails(ticketID)
                firestore.UpdateEscalatedTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Escalated", ticket['TechAssigned'], TechEscalatedTo, ticket['Date'], TechComment)
+               firestore.DeleteTickets(ticketID)
                
+               # update active count
+               firestore.UpdateActiveCount(ticket['TechAssigned'], "decrement")
+               firestore.UpdateActiveCount(techDisctionary2[TechEscalatedTo], "increment")
                return redirect('/tech_dashboard/')
                
           elif button_action == 'auto_transfer':
+               TechComment = request.POST.get('TechComment')
+               predictions = firestore.GetPredictionsList(ticketID)
+               maxActiveCount = firestore.GetMaxActiveCount()
+               techActiveCountInRange = firestore.GetTechActiveCount(maxActiveCount['MaxCount'])
                
+               key_to_compare = "id"
+               ticket = firestore.DisplayTicketDetails(ticketID)
+               
+               for i in predictions:
+                    for tech in techActiveCountInRange:
+                         if i == tech.get(key_to_compare) and i != ticket['TechAssigned']:
+                              TechEscalatedTo = i
+                              firestore.UpdateAutoEscalatedTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Escalated", ticket['TechAssigned'], TechEscalatedTo, ticket['Date'], TechComment)
+                              firestore.DeleteTickets(ticketID)
+                              firestore.UpdateActiveCount(ticket['TechAssigned'], "decrement")
+                              firestore.UpdateActiveCount(TechEscalatedTo, "increment")
+                              return redirect('/tech_dashboard/')
+
                return redirect('/tech_dashboard/')
           
           elif button_action == 'request':
@@ -222,6 +256,9 @@ def TechDashboardDetails(request, ticketID):
                firestore.UpdateAttentionRequiredTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Attention_Required", ticket['TechAssigned'], ticket['Date'], request_message)
                firestore.DeleteTickets(ticketID)
                
+               # update active count
+               firestore.UpdateActiveCount(ticket['TechAssigned'], "decrement")
+
                return redirect('/tech_dashboard/')
      
      ticketDetails = firestore.DisplayTicketDetails(ticketID)
@@ -278,9 +315,9 @@ def TechEscalatedTicketDetails(request, ticketID):
 
                firestore.DeleteEscalatedTickets(ticketID) 
                # update active count
-               firestore.UpdateActiveCount(ticket['TechAssigned'], "decrement")
+               firestore.UpdateActiveCount(ticket['TechTransferTo'], "decrement")
                # update resolve count
-               firestore.UpdateResolveCount(ticket['TechAssigned'], "increment")
+               firestore.UpdateResolveCount(ticket['TechTransferTo'], "increment")
 
                return redirect('/escalated/')
 
@@ -290,9 +327,29 @@ def TechEscalatedTicketDetails(request, ticketID):
                ticket = firestore.GetEscalatedTicket(ticketID)
                firestore.UpdateEscalatedTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Escalated", ticket['TechTransferTo'], TechEscalatedTo, ticket['DateCreated'], TechComment)
 
+               # update active count
+               firestore.UpdateActiveCount(ticket['TechTransferTo'], "decrement")
+               firestore.UpdateActiveCount(techDisctionary2[TechEscalatedTo], "increment")
+               
                return redirect('/escalated/')
 
           elif button_action == 'auto_transfer':
+               TechComment = request.POST.get('TechComment')
+               predictions = firestore.GetPredictionsList(ticketID)
+               maxActiveCount = firestore.GetMaxActiveCount()
+               techActiveCountInRange = firestore.GetTechActiveCount(maxActiveCount['MaxCount'])
+               
+               key_to_compare = "id"
+               ticket = firestore.GetEscalatedTicket(ticketID)
+               
+               for i in predictions:
+                    for tech in techActiveCountInRange:
+                         if i == tech.get(key_to_compare) and i != ticket['TechTransferTo']:
+                              TechEscalatedTo = i
+                              firestore.UpdateAutoEscalatedTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Escalated", ticket['TechTransferTo'], TechEscalatedTo, ticket['DateCreated'], TechComment)
+                              firestore.UpdateActiveCount(ticket['TechTransferTo'], "decrement")
+                              firestore.UpdateActiveCount(TechEscalatedTo, "increment")
+                              return redirect('/escalated/')
 
                return redirect('/escalated/')
 
@@ -302,12 +359,16 @@ def TechEscalatedTicketDetails(request, ticketID):
                firestore.UpdateAttentionRequiredTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Attention_Required", ticket['TechTransferTo'], ticket['DateCreated'], request_message)
                firestore.DeleteEscalatedTickets(ticketID)
 
+               # update active count
+               firestore.UpdateActiveCount(ticket['TechTransferTo'], "decrement")
+               
                return redirect('/escalated/')
 
      
      ticketDetails = firestore.GetEscalatedTicket(ticketID)
-     
-     return render(request, 'base/escalated_details.html', {'ticketDetails':ticketDetails})
+     techLists = firestore.GetTechList()
+     ticketDetail = {'ticketDetail': ticketDetails, 'techLists': techLists}
+     return render(request, 'base/escalated_details.html', ticketDetail)
 
 # ========================================End Tech Escalated Tickets=============================================
 
@@ -329,8 +390,8 @@ def TechReturnedTicketDetails(request, ticketID):
           elif button_action == 'resolve':
                how_ticket_was_resolve = request.POST.get('how_ticket_was_resolve')
                comment = request.POST.get('comment')
-               ticket = firestore.DisplayTicketDetails(ticketID)
-               firestore.UpdateResolvedTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Resolved", ticket['TechAssigned'], ticket['Date'], comment, how_ticket_was_resolve)
+               ticket = firestore.DisplayAllReturnedTicket(ticketID)
+               firestore.UpdateResolvedTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Resolved", ticket['TechAssigned'], ticket['DateCreated'], comment, how_ticket_was_resolve)
 
                firestore.DeleteReturnedTickets(ticketID) 
                # update active count
@@ -343,27 +404,54 @@ def TechReturnedTicketDetails(request, ticketID):
           elif button_action == 'transfer':
                TechComment = request.POST.get('TechComment')
                TechEscalatedTo = request.POST.get('selected_technician')
-               ticket = firestore.DisplayTicketDetails(ticketID)
-               firestore.UpdateEscalatedTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Escalated", ticket['TechAssigned'], TechEscalatedTo, ticket['Date'], TechComment)
+               ticket = firestore.DisplayAllReturnedTicket(ticketID)
+               firestore.UpdateEscalatedTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Escalated", ticket['TechAssigned'], TechEscalatedTo, ticket['DateCreated'], TechComment)
+               firestore.DeleteReturnedTickets(ticketID)
 
+               # update active count
+               firestore.UpdateActiveCount(ticket['TechAssigned'], "decrement")
+               firestore.UpdateActiveCount(techDisctionary2[TechEscalatedTo], "increment")
+               
                return redirect('/return/')
 
           elif button_action == 'auto_transfer':
+               TechComment = request.POST.get('TechComment')
+               predictions = firestore.GetPredictionsList(ticketID)
+               maxActiveCount = firestore.GetMaxActiveCount()
+               techActiveCountInRange = firestore.GetTechActiveCount(maxActiveCount['MaxCount'])
+               
+               key_to_compare = "id"
+               ticket = firestore.DisplayAllReturnedTicket(ticketID)
+               
+               for i in predictions:
+                    for tech in techActiveCountInRange:
+                         if i == tech.get(key_to_compare) and i != ticket['TechAssigned']:
+                              TechEscalatedTo = i
+                              firestore.UpdateAutoEscalatedTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Escalated", ticket['TechAssigned'], TechEscalatedTo, ticket['DateCreated'], TechComment)
+                              firestore.DeleteReturnedTickets(ticketID)
+                              firestore.UpdateActiveCount(ticket['TechAssigned'], "decrement")
+                              firestore.UpdateActiveCount(TechEscalatedTo, "increment")
+                              return redirect('/return/')
 
                return redirect('/return/')
 
           elif button_action == 'request':
                request_message = request.POST.get('request_message')
-               ticket = firestore.DisplayTicketDetails(ticketID)
-               firestore.UpdateAttentionRequiredTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Attention_Required", ticket['TechAssigned'], ticket['Date'], request_message)
+               ticket = firestore.DisplayAllReturnedTicket(ticketID)
+               firestore.UpdateAttentionRequiredTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Attention_Required", ticket['TechAssigned'], ticket['DateCreated'], request_message)
                firestore.DeleteReturnedTickets(ticketID)
 
+               # update active count
+               firestore.UpdateActiveCount(ticket['TechAssigned'], "decrement")
+               
                return redirect('/return/')
 
      
      ticketDetails = firestore.DisplayAllReturnedTicket(ticketID)
+     techLists = firestore.GetTechList()
+     ticketDetail = {'ticketDetail': ticketDetails, 'techLists': techLists}
      
-     return render(request, 'base/return_details.html', {'ticketDetails':ticketDetails})
+     return render(request, 'base/return_details.html', ticketDetail)
 
 # ========================================End Tech's Returned Ticket=======================================
 
@@ -403,13 +491,31 @@ techDisctionary = {
      "tech7@gmail.com": 'Technician GRP 7',
 }
 
+techDisctionary2 = {
+     "GRP_0": "tech0@gmail.com",
+     "GRP_1": "tech1@gmail.com",
+     "GRP_2": "tech2@gmail.com",
+     "GRP_3": "tech3@gmail.com",
+     "GRP_4": "tech4@gmail.com",
+     "GRP_5": "tech5@gmail.com",
+     "GRP_6": "tech6@gmail.com",
+     "GRP_7": "tech7@gmail.com",
+}
+
 # 1. Create active ticket count for each technician ==============DONE============
 # 2. Increament and decrement active ticket count accordingly ========DONE============
 # 3. Update db for additional fields like comment etc ==============DONE============
 # 4. Create table for all resolved tickets and how it was resolved ==============DONE============
 # 5. Create table for all pending tickets ==============DONE============
 # 6. User can re-submit tickets if problem was not solved ==============DONE============
-# 7. Escalate tickets ***
+# 7. Escalate tickets *** ==============DONE============
 # 9. Notify technician when ticket is assigned to them
 # 10 Translation
 # 8. Create reporting tool for admin ***
+
+# when a ticket is resubmitted, shouyld add it on the pending ticket list for user
+# try to add an accept button for resolved page on user side
+
+# Pending tickets -> Resolved, Request, transfer, auto-transfer
+# Returned tickets -> Resolved, Request, transfer, auto-transfer
+# Escalated tickets -> Resolved, request, transfer, auto-transfer

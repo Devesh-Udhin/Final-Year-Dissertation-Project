@@ -5,31 +5,31 @@
 
 <div class="attribute">
   <span class="attribute-label">Caller:</span>
-  <span class="attribute-value">{{ ticketDetails.Caller }}</span>
+  <span class="attribute-value">{{ ticketDetail.Caller }}</span>
 </div>   
 <div class="attribute">
   <span class="attribute-label">Title:</span>
-  <span class="attribute-value">{{ ticketDetails.Title }}</span>
+  <span class="attribute-value">{{ ticketDetail.Title }}</span>
 </div>   
 <div class="attribute">
   <span class="attribute-label">Description:</span>
-  <span class="attribute-value">{{ ticketDetails.Description }}</span>
+  <span class="attribute-value">{{ ticketDetail.Description }}</span>
 </div>   
 <div class="attribute">
   <span class="attribute-label">Date Created:</span>
-  <span class="attribute-value">{{ ticketDetails.DateCreated }}</span>
+  <span class="attribute-value">{{ ticketDetail.DateCreated }}</span>
 </div>
 <div class="attribute">
-     <span class="attribute-label">Date Returned:</span>
-     <span class="attribute-value">{{ ticketDetails.DateReturned }}</span>
+     <span class="attribute-label">Date Responded:</span>
+     <span class="attribute-value">{{ ticketDetail.DateResponded }}</span>
    </div>   
 <div class="attribute">
   <span class="attribute-label">Technician's Comment:</span>
-  <span class="attribute-value">{{ ticketDetails.TechComment }}</span>
+  <span class="attribute-value">{{ ticketDetail.TechComment }}</span>
 </div>   
 <div class="attribute">
   <span class="attribute-label">User's Comment:</span>
-  <span class="attribute-value">{{ ticketDetails.UserComment }}</span>
+  <span class="attribute-value">{{ ticketDetail.UserComment }}</span>
 </div>
 
 <div>
@@ -117,6 +117,39 @@
                      {% comment %} Manually Transfer {% endcomment %}
                      <input type="hidden" name="button_action" value="transfer">
                      <input type="submit" value="Transfer" class="btn btn-success">
+                   </div>
+                 </div>
+               </div>
+          </div>
+
+     </form>
+
+     {% comment %} Transfer Button {% endcomment %}
+     <form method="POST" class="button-form">
+          {% csrf_token %}
+          <input type="hidden" name="button_action" value="transfer">
+          <button type="button" class="btn btn-success" data-toggle="modal" data-target="#exampleModal3">
+               Auto Transfer
+          </button>
+
+          <!-- Modal -->
+          <div class="modal fade" id="exampleModal3" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+               <div class="modal-dialog" role="document">
+                 <div class="modal-content">
+                   <div class="modal-header">
+                     <h5 class="modal-title" id="exampleModalLabel">Transfer Ticket to another Technician</h5>
+                     <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                       <span aria-hidden="true">&times;</span>
+                     </button>
+                   </div>
+                   <form>
+                    <div class="form-group">
+                      <label for="comment" class="col-form-label">Comment:</label>
+                      <textarea class="form-control" name="TechComment" id="comment"></textarea>
+                    </div>
+                  </form>
+                   <div class="modal-footer">
+                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
                      
                      {% comment %} Auto Transfer {% endcomment %}
                      <input type="hidden" name="button_action" value="auto_transfer">
@@ -131,12 +164,12 @@
      {% comment %} Request Information Button {% endcomment %}
      <form method="POST" class="button-form">
           {% csrf_token %}
-          <button type="button" class="btn btn-success" data-toggle="modal" data-target="#exampleModal3">
+          <button type="button" class="btn btn-success" data-toggle="modal" data-target="#exampleModal4">
                Request Information
           </button>
 
           <!-- Modal -->
-          <div class="modal fade" id="exampleModal3" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+          <div class="modal fade" id="exampleModal4" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
                <div class="modal-dialog" role="document">
                  <div class="modal-content">
                    <div class="modal-header">

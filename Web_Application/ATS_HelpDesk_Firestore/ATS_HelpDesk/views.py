@@ -156,7 +156,7 @@ def UpdateAttentionRequiredTable(ticketID, Caller, Title, Description, Status, T
      # Convert the date to a Firestore timestamp
      DateReturned = gc_firestore.SERVER_TIMESTAMP if isinstance(DateReturned, type(date.today())) else DateReturned
 
-     data = {'Caller':Caller, 'Title':Title, 'Description':Description, 'Status':Status, 'TechAssigned':TechAssigned, 'DateCreated':DateCreated, 'DateReturned':DateReturned, 'Questions':request_message}
+     data = {'Caller':Caller, 'Title':Title, 'Description':Description, 'Status':Status, 'TechAssigned':TechAssigned, 'DateCreated':DateCreated, 'DateReturned':DateReturned, 'TechComment':request_message}
      db.collection('AttentionRequiredTickets').document(ticketID).set(data)
      
 def DeleteAtentionRequiredTickets(ticketID):
@@ -183,11 +183,11 @@ def DisplayAllReturnedTicket(ticketID):
      return ticket
      
 def UpdateReturnedTable(ticketID, Caller, Title, Description, TechAssigned, DateCreated, TechComment, UserComment):
-     DateReturned = date.today()
+     DateResponded = date.today()
      # Convert the date to a Firestore timestamp
-     DateReturned = gc_firestore.SERVER_TIMESTAMP if isinstance(DateReturned, type(date.today())) else DateReturned
+     DateResponded = gc_firestore.SERVER_TIMESTAMP if isinstance(DateResponded, type(date.today())) else DateResponded
 
-     data = {'Caller':Caller, 'Title':Title, 'Description':Description, 'Status':"Returned", 'TechAssigned':TechAssigned, 'DateCreated':DateCreated, 'DateReturned':DateReturned, 'TechComment':TechComment, 'UserComment':UserComment}
+     data = {'Caller':Caller, 'Title':Title, 'Description':Description, 'Status':"Returned", 'TechAssigned':TechAssigned, 'DateCreated':DateCreated, 'DateResponded':DateResponded, 'TechComment':TechComment, 'UserComment':UserComment}
      db.collection('RespondedTickets').document(ticketID).set(data)
 
 def DeleteReturnedTickets(ticketID):
@@ -213,12 +213,20 @@ def GetEscalatedTicket(ticketID):
      ticket['id'] = result.id
      return ticket
 
-def UpdateEscalatedTable(ticketID, Caller, Title, Description, Status, TechEscalatedFrom, TechEscalatedTo, DateCreated, TechComment):
+def UpdateEscalatedTable(ticketID, Caller, Title, Description, Status, TechTransferFrom, TechTransferTo, DateCreated, TechComment):
      DateEscalated = date.today()
      # Convert the date to a Firestore timestamp
      DateEscalated = gc_firestore.SERVER_TIMESTAMP if isinstance(DateEscalated, type(date.today())) else DateEscalated
 
-     data = {'Caller':Caller, 'Title':Title, 'Description':Description, 'Status':Status, 'TechEscalatedFrom':TechEscalatedFrom, 'TechEscalatedTo':techDisctionary[TechEscalatedTo], 'DateCreated':DateCreated, 'DateEscalated':DateEscalated, 'TechComment':TechComment}
+     data = {'Caller':Caller, 'Title':Title, 'Description':Description, 'Status':Status, 'TechTransferFrom':TechTransferFrom, 'TechTransferTo':techDisctionary[TechTransferTo], 'DateCreated':DateCreated, 'DateEscalated':DateEscalated, 'TechComment':TechComment}
+     db.collection('EscalatedTickets').document(ticketID).set(data)
+
+def UpdateAutoEscalatedTable(ticketID, Caller, Title, Description, Status, TechTransferFrom, TechTransferTo, DateCreated, TechComment):
+     DateEscalated = date.today()
+     # Convert the date to a Firestore timestamp
+     DateEscalated = gc_firestore.SERVER_TIMESTAMP if isinstance(DateEscalated, type(date.today())) else DateEscalated
+
+     data = {'Caller':Caller, 'Title':Title, 'Description':Description, 'Status':Status, 'TechTransferFrom':TechTransferFrom, 'TechTransferTo':TechTransferTo, 'DateCreated':DateCreated, 'DateEscalated':DateEscalated, 'TechComment':TechComment}
      db.collection('EscalatedTickets').document(ticketID).set(data)
 
 def DeleteEscalatedTickets(ticketID):
@@ -227,7 +235,7 @@ def DeleteEscalatedTickets(ticketID):
 
 # ============================================End Escalated Table====================================
 
-# =========================================Start Active Count========================================
+# =========================================Start Technicians Table========================================
 def UpdateActiveCount(technician, action):
 
      transaction = db.transaction()
@@ -272,7 +280,18 @@ def UpdateResolveCount(technician, action):
 
      transaction_callback(transaction, doc_ref)
 
-# =========================================End Active Count========================================     
+def GetTechActiveCount(maxCount):
+     docs = db.collection('Technicians').where("ActiveCount", "<", maxCount).get()
+     results = []
+     for doc in docs:
+          data = doc.to_dict()
+          data['id'] = doc.id
+          results.append(data)
+          
+     return results
+
+
+# =========================================End Technicians Table========================================     
 
 # =========================================Start Users Table=========================================
 
@@ -293,4 +312,25 @@ def GetTechList():
 
      return tech_array_data
 
-# =========================================End Info Table========================================     
+def GetMaxActiveCount():
+     maxActiveCount = db.collection('Info').document('MaxActiveCount').get()
+     maxActiveCount = maxActiveCount.to_dict()
+
+     return maxActiveCount
+
+# ================================================End Info Table============================================
+
+# =========================================Start AllPredictions Table=======================================
+
+def UpdateAllPredictionsTable(ticketID, predictionList):
+     db.collection("AllPredictions").document(ticketID).set({"Predictions": predictionList})
+
+def GetPredictionsList(ticketID):
+     predictionsLists = db.collection('AllPredictions').document(ticketID).get()
+     predictionsListsDict = predictionsLists.to_dict()
+
+     predictions_array_data = predictionsListsDict.get('Predictions', [])
+
+     return predictions_array_data
+
+# =========================================End AllPredictions Table=========================================
