@@ -20,4 +20,6 @@ urlpatterns = [
     path('return/details/<str:ticketID>', views.TechReturnedTicketDetails, name="TechReturnedTicketDetails"),
     path('escalated/', views.TechEscalatedTicket, name="TechEscalatedTicket"),
     path('escalated/details/<str:ticketID>', views.TechEscalatedTicketDetails, name="TechEscalatedTicketDetails"),
+    # Admin
+    path('admin_dashboard/', views.AdminDashboard, name="AdminDashboard"),
 ]

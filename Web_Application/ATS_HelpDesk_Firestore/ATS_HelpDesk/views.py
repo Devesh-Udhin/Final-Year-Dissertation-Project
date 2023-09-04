@@ -32,17 +32,6 @@ pyrebase_auth = pyrebase_firebase.auth()
 pyrebase_database = pyrebase_firebase.database()
 # End of Authentication by pyrebase
 
-techDisctionary = {
-     "GRP_0": "tech0@gmail.com",
-     "GRP_1": "tech1@gmail.com",
-     "GRP_2": "tech2@gmail.com",
-     "GRP_3": "tech3@gmail.com",
-     "GRP_4": "tech4@gmail.com",
-     "GRP_5": "tech5@gmail.com",
-     "GRP_6": "tech6@gmail.com",
-     "GRP_7": "tech7@gmail.com",
-}
-
 # =============================================Start Sign in=======================================
 
 def sign_in(email, password):
@@ -76,9 +65,9 @@ def DeleteTickets(ticketID):
      db.collection('Tickets').document(ticketID).delete()
      return
 
-def CreateTicket(ticketID, title, description, date, status, techAssigned, caller):
+def CreateTicket(ticketID, title, description, date, status, techAssigned, caller, originalLang):
      
-     data = {'Title':title, 'Description':description, 'Caller':caller, 'Date':date, 'TechAssigned':techAssigned, 'Status':status}
+     data = {'Title':title, 'Description':description, 'Caller':caller, 'Date':date, 'TechAssigned':techAssigned, 'Status':status, 'OriginalLang':originalLang}
      db.collection('Tickets').document(ticketID).set(data)
      
 def GetTechTickets(techEmail):
@@ -120,12 +109,12 @@ def GetResolvedTicket(ticketID):
      ticket['id'] = result.id
      return ticket
 
-def UpdateResolvedTable(ticketID, Caller, Title, Description, Status, TechResolved, DateCreated, comment, how_ticket_was_resolve):
+def UpdateResolvedTable(ticketID, Caller, Title, Description, Status, TechResolved, DateCreated, comment, how_ticket_was_resolve, originalLang):
      DateResolved = date.today()
      # Convert the date to a Firestore timestamp
      DateResolved = gc_firestore.SERVER_TIMESTAMP if isinstance(DateResolved, type(date.today())) else DateResolved
 
-     data = {'Caller':Caller, 'Title':Title, 'Description':Description, 'Status':Status, 'TechResolved':TechResolved, 'DateCreated':DateCreated, 'DateResolved':DateResolved, 'Comments':comment, 'HowTicketWasResolve':how_ticket_was_resolve}
+     data = {'Caller':Caller, 'Title':Title, 'Description':Description, 'Status':Status, 'TechResolved':TechResolved, 'DateCreated':DateCreated, 'DateResolved':DateResolved, 'Comments':comment, 'HowTicketWasResolve':how_ticket_was_resolve, 'OriginalLang':originalLang}
      db.collection('ResolvedTickets').document(ticketID).set(data)
 
 def DeleteResolvedTickets(ticketID):
@@ -151,12 +140,12 @@ def DisplayAllAttentionRequiredTicket(ticketID):
      ticket['id'] = result.id
      return ticket
 
-def UpdateAttentionRequiredTable(ticketID, Caller, Title, Description, Status, TechAssigned, DateCreated, request_message):
+def UpdateAttentionRequiredTable(ticketID, Caller, Title, Description, Status, TechAssigned, DateCreated, request_message, originalLang):
      DateReturned = date.today()
      # Convert the date to a Firestore timestamp
      DateReturned = gc_firestore.SERVER_TIMESTAMP if isinstance(DateReturned, type(date.today())) else DateReturned
 
-     data = {'Caller':Caller, 'Title':Title, 'Description':Description, 'Status':Status, 'TechAssigned':TechAssigned, 'DateCreated':DateCreated, 'DateReturned':DateReturned, 'TechComment':request_message}
+     data = {'Caller':Caller, 'Title':Title, 'Description':Description, 'Status':Status, 'TechAssigned':TechAssigned, 'DateCreated':DateCreated, 'DateReturned':DateReturned, 'TechComment':request_message, 'OriginalLang':originalLang}
      db.collection('AttentionRequiredTickets').document(ticketID).set(data)
      
 def DeleteAtentionRequiredTickets(ticketID):
@@ -182,12 +171,12 @@ def DisplayAllReturnedTicket(ticketID):
      ticket['id'] = result.id
      return ticket
      
-def UpdateReturnedTable(ticketID, Caller, Title, Description, TechAssigned, DateCreated, TechComment, UserComment):
+def UpdateReturnedTable(ticketID, Caller, Title, Description, TechAssigned, DateCreated, TechComment, UserComment, originalLang):
      DateResponded = date.today()
      # Convert the date to a Firestore timestamp
      DateResponded = gc_firestore.SERVER_TIMESTAMP if isinstance(DateResponded, type(date.today())) else DateResponded
 
-     data = {'Caller':Caller, 'Title':Title, 'Description':Description, 'Status':"Returned", 'TechAssigned':TechAssigned, 'DateCreated':DateCreated, 'DateResponded':DateResponded, 'TechComment':TechComment, 'UserComment':UserComment}
+     data = {'Caller':Caller, 'Title':Title, 'Description':Description, 'Status':"Returned", 'TechAssigned':TechAssigned, 'DateCreated':DateCreated, 'DateResponded':DateResponded, 'TechComment':TechComment, 'UserComment':UserComment, 'OriginalLang':originalLang}
      db.collection('RespondedTickets').document(ticketID).set(data)
 
 def DeleteReturnedTickets(ticketID):
@@ -218,7 +207,7 @@ def UpdateEscalatedTable(ticketID, Caller, Title, Description, Status, TechTrans
      # Convert the date to a Firestore timestamp
      DateEscalated = gc_firestore.SERVER_TIMESTAMP if isinstance(DateEscalated, type(date.today())) else DateEscalated
 
-     data = {'Caller':Caller, 'Title':Title, 'Description':Description, 'Status':Status, 'TechTransferFrom':TechTransferFrom, 'TechTransferTo':techDisctionary[TechTransferTo], 'DateCreated':DateCreated, 'DateEscalated':DateEscalated, 'TechComment':TechComment}
+     data = {'Caller':Caller, 'Title':Title, 'Description':Description, 'Status':Status, 'TechTransferFrom':TechTransferFrom, 'TechTransferTo':TechTransferTo, 'DateCreated':DateCreated, 'DateEscalated':DateEscalated, 'TechComment':TechComment}
      db.collection('EscalatedTickets').document(ticketID).set(data)
 
 def UpdateAutoEscalatedTable(ticketID, Caller, Title, Description, Status, TechTransferFrom, TechTransferTo, DateCreated, TechComment):

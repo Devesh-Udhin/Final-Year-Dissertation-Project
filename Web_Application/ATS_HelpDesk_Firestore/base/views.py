@@ -8,6 +8,9 @@ from ATS_HelpDesk import views as firestore
 from datetime import date
 from google.cloud import firestore as gc_firestore
 from django.contrib.auth import logout
+from googletrans import Translator
+from django.core.mail import EmailMessage
+translator = Translator()
 
 # =============================================Start Login=======================================================
 
@@ -54,6 +57,11 @@ def TicketList(request):
      
      ticketLists = firestore.DisplayTicket(request.session['user_email'])
      
+     for ticket in ticketLists:
+          if ticket['OriginalLang'] != 'en':
+               ticket['Description'] = translator.translate(ticket['Description'], dest=ticket['OriginalLang']).text
+               ticket['Title'] = translator.translate(ticket['Title'], dest=ticket['OriginalLang']).text
+          
      return render(request, 'base/ticket_list.html', {'ticketLists':ticketLists})
 
 # =============================================End User's Pending Tickets list===================================
@@ -76,6 +84,12 @@ def CreateTicket(request):
           if description is None or title is None:
                return render(request, 'base/create_ticket.html')
           else: 
+
+               # Detect the language of the sentence
+               detected_lang = translator.detect(description).lang
+               if detected_lang != 'en':
+                    description = translator.translate(description, dest='en').text
+               
                preProcessDescription = data_preprocessing.pre_process_data(description)
                
                empty_list_of_lists = []
@@ -112,8 +126,9 @@ def CreateTicket(request):
                for i in prediction_list:
                     for tech in techActiveCountInRange:
                          if i == tech.get(key_to_compare):
-                              firestore.CreateTicket(ticketID, title, description, timestamp, status, tech, caller)
-                              firestore.UpdateActiveCount(tech, "increment")
+                              firestore.CreateTicket(ticketID, title, description, timestamp, status, i, caller, detected_lang)
+                              SendEmail("New Ticket Assignment", "atsdjangomain@gmail.com", ['atsdjango'+i], ticketID, str(todayDate), caller, "create")
+                              firestore.UpdateActiveCount(i, "increment")
                               write()
                               return render(request, 'base/create_ticket.html')
                
@@ -128,6 +143,12 @@ def Resolve(request):
      
      ticketLists = firestore.DisplayTicketFeedback(request.session['user_email'])
      
+     for ticket in ticketLists:
+          if ticket['OriginalLang'] != 'en':
+               ticket['Description'] = translator.translate(ticket['Description'], dest=ticket['OriginalLang']).text
+               ticket['Title'] = translator.translate(ticket['Title'], dest=ticket['OriginalLang']).text
+               ticket['Comments'] = translator.translate(ticket['Comments'], dest=ticket['OriginalLang']).text
+     
      return render(request, 'base/resolve.html', {'ticketLists':ticketLists})
 
 def ResolveDetails(request, ticketID):
@@ -141,14 +162,28 @@ def ResolveDetails(request, ticketID):
           elif(button_action == 're-send'):
                
                UserComment = request.POST.get('comment')
+               
+               # Detect the language of the sentence
+               detected_lang = translator.detect(UserComment).lang
+               if detected_lang != 'en':
+                    UserComment = translator.translate(UserComment, dest='en').text
+
+               DateResponded = date.today()
+               
                ticket = firestore.GetResolvedTicket(ticketID)
                
-               firestore.UpdateReturnedTable(ticketID, ticket['Caller'], ticket['Title'], ticket['Description'], ticket['TechResolved'], ticket['DateCreated'], ticket['Comments'], UserComment)
+               firestore.UpdateReturnedTable(ticketID, ticket['Caller'], ticket['Title'], ticket['Description'], ticket['TechResolved'], ticket['DateCreated'], ticket['Comments'], UserComment, ticket['OriginalLang'])
                firestore.DeleteResolvedTickets(ticketID)
+               SendEmail("New Responded Ticket", "atsdjangomain@gmail.com", ['atsdjango'+ticket['TechResolved']], ticketID, str(DateResponded), ticket['Caller'], "respond")
                return redirect('/resolve/')
                
      
      ticketDetails = firestore.GetResolvedTicket(ticketID)
+     
+     if ticketDetails['OriginalLang'] != 'en':
+          ticketDetails['Description'] = translator.translate(ticketDetails['Description'], dest=ticketDetails['OriginalLang']).text
+          ticketDetails['Title'] = translator.translate(ticketDetails['Title'], dest=ticketDetails['OriginalLang']).text
+          ticketDetails['Comments'] = translator.translate(ticketDetails['Comments'], dest=ticketDetails['OriginalLang']).text
      
      return render(request, 'base/resolve_details.html', {'ticketDetails':ticketDetails})
 
@@ -159,6 +194,11 @@ def ResolveDetails(request, ticketID):
 def AttentionRequired(request):
      
      ticketLists = firestore.DisplayAttentionRequiredTicket(request.session['user_email'])
+     for ticket in ticketLists:
+          if ticket['OriginalLang'] != 'en':
+               ticket['Description'] = translator.translate(ticket['Description'], dest=ticket['OriginalLang']).text
+               ticket['Title'] = translator.translate(ticket['Title'], dest=ticket['OriginalLang']).text
+               ticket['TechComment'] = translator.translate(ticket['TechComment'], dest=ticket['OriginalLang']).text
      
      return render(request, 'base/attention_required.html', {'ticketLists':ticketLists})
 
@@ -172,13 +212,27 @@ def AttentionRequiredDetails(request, ticketID):
           
           elif(button_action == 'respond'):
                UserComment = request.POST.get('responce')
-               ticket = firestore.DisplayAllAttentionRequiredTicket(ticketID)
-               firestore.UpdateReturnedTable(ticketID, ticket['Caller'], ticket['Title'], ticket['Description'], ticket['TechAssigned'], ticket['DateCreated'], ticket['TechComment'], UserComment)
+               
+               # Detect the language of the sentence
+               detected_lang = translator.detect(UserComment).lang
+               if detected_lang != 'en':
+                    UserComment = translator.translate(UserComment, dest='en').text
+               
+               DateResponded = date.today()
+               
+               ticket = firestore.DisplayAllAttentionRequiredTicket(ticketID)               
+               firestore.UpdateReturnedTable(ticketID, ticket['Caller'], ticket['Title'], ticket['Description'], ticket['TechAssigned'], ticket['DateCreated'], ticket['TechComment'], UserComment, ticket['OriginalLang'])
                firestore.DeleteAtentionRequiredTickets(ticketID)
+               SendEmail("New Responded Ticket", "atsdjangomain@gmail.com", ['atsdjango'+ticket['TechAssigned']], ticketID, str(DateResponded), ticket['Caller'], "respond")
                return redirect('/attention_required/')
           
      
      ticketDetails = firestore.DisplayAllAttentionRequiredTicket(ticketID)
+     
+     if ticketDetails['OriginalLang'] != 'en':
+          ticketDetails['Description'] = translator.translate(ticketDetails['Description'], dest=ticketDetails['OriginalLang']).text
+          ticketDetails['Title'] = translator.translate(ticketDetails['Title'], dest=ticketDetails['OriginalLang']).text
+          ticketDetails['TechComment'] = translator.translate(ticketDetails['TechComment'], dest=ticketDetails['OriginalLang']).text
      
      return render(request, 'base/attention_required_details.html', {'ticketDetails':ticketDetails})
 
@@ -187,87 +241,6 @@ def AttentionRequiredDetails(request, ticketID):
 # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>End User's Side<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
 # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>Start Technicians's Side<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-
-# =============================================Start Tech Dashboard================================================
-
-def TechDashboard(request):
-
-     techAssignedTickets = firestore.GetTechTickets(request.session['user_email'])
-     
-     return render(request, 'base/tech_dashboard.html', {'techAssignedTickets': techAssignedTickets, 'cuurentTech': techDisctionary[request.session['user_email']]})
-
-def TechDashboardDetails(request, ticketID):
-     if request.method == 'POST':
-          button_action = request.POST.get('button_action')
-     
-          if button_action == 'back':
-               return redirect('/tech_dashboard/')
-          
-          elif button_action == 'resolve':
-               how_ticket_was_resolve = request.POST.get('how_ticket_was_resolve')
-               comment = request.POST.get('comment')
-               ticket = firestore.DisplayTicketDetails(ticketID)
-               firestore.UpdateResolvedTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Resolved", ticket['TechAssigned'], ticket['Date'], comment, how_ticket_was_resolve)
-               
-               firestore.DeleteTickets(ticketID)
-               # update active count
-               firestore.UpdateActiveCount(ticket['TechAssigned'], "decrement")
-               # update resolve count
-               firestore.UpdateResolveCount(ticket['TechAssigned'], "increment")
-               
-               return redirect('/tech_dashboard/')
-          
-          elif button_action == 'transfer':
-               TechComment = request.POST.get('TechComment')
-               TechEscalatedTo = request.POST.get('selected_technician')
-               ticket = firestore.DisplayTicketDetails(ticketID)
-               firestore.UpdateEscalatedTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Escalated", ticket['TechAssigned'], TechEscalatedTo, ticket['Date'], TechComment)
-               firestore.DeleteTickets(ticketID)
-               
-               # update active count
-               firestore.UpdateActiveCount(ticket['TechAssigned'], "decrement")
-               firestore.UpdateActiveCount(techDisctionary2[TechEscalatedTo], "increment")
-               return redirect('/tech_dashboard/')
-               
-          elif button_action == 'auto_transfer':
-               TechComment = request.POST.get('TechComment')
-               predictions = firestore.GetPredictionsList(ticketID)
-               maxActiveCount = firestore.GetMaxActiveCount()
-               techActiveCountInRange = firestore.GetTechActiveCount(maxActiveCount['MaxCount'])
-               
-               key_to_compare = "id"
-               ticket = firestore.DisplayTicketDetails(ticketID)
-               
-               for i in predictions:
-                    for tech in techActiveCountInRange:
-                         if i == tech.get(key_to_compare) and i != ticket['TechAssigned']:
-                              TechEscalatedTo = i
-                              firestore.UpdateAutoEscalatedTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Escalated", ticket['TechAssigned'], TechEscalatedTo, ticket['Date'], TechComment)
-                              firestore.DeleteTickets(ticketID)
-                              firestore.UpdateActiveCount(ticket['TechAssigned'], "decrement")
-                              firestore.UpdateActiveCount(TechEscalatedTo, "increment")
-                              return redirect('/tech_dashboard/')
-
-               return redirect('/tech_dashboard/')
-          
-          elif button_action == 'request':
-               request_message = request.POST.get('request_message')
-               ticket = firestore.DisplayTicketDetails(ticketID)
-               firestore.UpdateAttentionRequiredTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Attention_Required", ticket['TechAssigned'], ticket['Date'], request_message)
-               firestore.DeleteTickets(ticketID)
-               
-               # update active count
-               firestore.UpdateActiveCount(ticket['TechAssigned'], "decrement")
-
-               return redirect('/tech_dashboard/')
-     
-     ticketDetails = firestore.DisplayTicketDetails(ticketID)
-     techLists = firestore.GetTechList()
-     ticketDetail = {'ticketDetail': ticketDetails, 'techLists': techLists}
-     
-     return render(request, 'base/tech_dashboard_details.html', ticketDetail)
-
-# =============================================End Tech Dashboard================================================
 
 # ========================================Start Tech's Resolved Ticket===========================================
 def TechResolvedTickets(request):
@@ -292,6 +265,93 @@ def TechResolvedTicketsDetails(request, ticketID):
 
 # ========================================End Tech's Resolved Ticket===============================================
 
+# =============================================Start Tech Dashboard================================================
+
+def TechDashboard(request):
+
+     techAssignedTickets = firestore.GetTechTickets(request.session['user_email'])
+     
+     return render(request, 'base/tech_dashboard.html', {'techAssignedTickets': techAssignedTickets, 'cuurentTech': techDisctionary[request.session['user_email']]})
+
+def TechDashboardDetails(request, ticketID):
+     if request.method == 'POST':
+          button_action = request.POST.get('button_action')
+          DateResponded = date.today()
+          if button_action == 'back':
+               return redirect('/tech_dashboard/')
+          
+          elif button_action == 'resolve':
+               how_ticket_was_resolve = request.POST.get('how_ticket_was_resolve')
+               comment = request.POST.get('comment')
+               ticket = firestore.DisplayTicketDetails(ticketID)
+
+               firestore.UpdateResolvedTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Resolved", ticket['TechAssigned'], ticket['Date'], comment, how_ticket_was_resolve, ticket['OriginalLang'])
+               
+               firestore.DeleteTickets(ticketID)
+               # update active count
+               firestore.UpdateActiveCount(ticket['TechAssigned'], "decrement")
+               # update resolve count
+               firestore.UpdateResolveCount(ticket['TechAssigned'], "increment")
+               
+               SendEmail("New Resolved Ticket", "atsdjangomain@gmail.com", ['atsdjango'+ticket['TechAssigned']], ticketID, str(DateResponded), ticket['Caller'], "resolve")
+               
+               return redirect('/tech_dashboard/')
+          
+          elif button_action == 'transfer':
+               TechComment = request.POST.get('TechComment')
+               TechEscalatedTo = request.POST.get('selected_technician')
+               ticket = firestore.DisplayTicketDetails(ticketID)
+               firestore.UpdateEscalatedTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Escalated", ticket['TechAssigned'], techDisctionary2[TechEscalatedTo], ticket['Date'], TechComment)
+               firestore.DeleteTickets(ticketID)
+               
+               # update active count
+               firestore.UpdateActiveCount(ticket['TechAssigned'], "decrement")
+               firestore.UpdateActiveCount(techDisctionary2[TechEscalatedTo], "increment")
+               
+               SendEmail("New Transfered Ticket", "atsdjangomain@gmail.com", ['atsdjango'+techDisctionary2[TechEscalatedTo]], ticketID, str(DateResponded), ticket['Caller'], "escalate")
+               
+               return redirect('/tech_dashboard/')
+               
+          elif button_action == 'auto_transfer':
+               TechComment = request.POST.get('TechComment')
+               predictions = firestore.GetPredictionsList(ticketID)
+               maxActiveCount = firestore.GetMaxActiveCount()
+               techActiveCountInRange = firestore.GetTechActiveCount(maxActiveCount['MaxCount'])
+               key_to_compare = "id"
+               ticket = firestore.DisplayTicketDetails(ticketID)
+               
+               for i in predictions:
+                    for tech in techActiveCountInRange:
+                         if i == tech.get(key_to_compare) and i != ticket['TechAssigned']:
+                              TechEscalatedTo = i
+                              firestore.UpdateAutoEscalatedTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Escalated", ticket['TechAssigned'], TechEscalatedTo, ticket['Date'], TechComment)
+                              firestore.DeleteTickets(ticketID)
+                              firestore.UpdateActiveCount(ticket['TechAssigned'], "decrement")
+                              firestore.UpdateActiveCount(TechEscalatedTo, "increment")
+                              SendEmail("New Transfered Ticket", "atsdjangomain@gmail.com", ['atsdjango'+TechEscalatedTo], ticketID, str(DateResponded), ticket['Caller'], "escalate")
+                              return redirect('/tech_dashboard/')
+
+               return redirect('/tech_dashboard/')
+          
+          elif button_action == 'request':
+               request_message = request.POST.get('request_message')
+               ticket = firestore.DisplayTicketDetails(ticketID)               
+               firestore.UpdateAttentionRequiredTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Attention_Required", ticket['TechAssigned'], ticket['Date'], request_message, ticket['OriginalLang'])
+               firestore.DeleteTickets(ticketID)
+               
+               # update active count
+               firestore.UpdateActiveCount(ticket['TechAssigned'], "decrement")
+               SendEmail("New Attention Needed Ticket", "atsdjangomain@gmail.com", ['atsdjango'+ticket['Caller']], ticketID, str(DateResponded), ticket['Caller'], "info")
+               return redirect('/tech_dashboard/')
+     
+     ticketDetails = firestore.DisplayTicketDetails(ticketID)
+     techLists = firestore.GetTechList()
+     ticketDetail = {'ticketDetail': ticketDetails, 'techLists': techLists}
+     
+     return render(request, 'base/tech_dashboard_details.html', ticketDetail)
+
+# =============================================End Tech Dashboard================================================
+
 # ========================================Start Tech Escalated Tickets=============================================
 def TechEscalatedTicket(request):
      
@@ -303,7 +363,7 @@ def TechEscalatedTicketDetails(request, ticketID):
           
      if request.method == 'POST':
           button_action = request.POST.get('button_action')
-
+          DateResponded = date.today()
           if button_action == 'back':
                return redirect('/escalated/')
 
@@ -311,26 +371,26 @@ def TechEscalatedTicketDetails(request, ticketID):
                how_ticket_was_resolve = request.POST.get('how_ticket_was_resolve')
                comment = request.POST.get('comment')
                ticket = firestore.GetEscalatedTicket(ticketID)
-               firestore.UpdateResolvedTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Resolved", ticket['TechTransferTo'], ticket['DateCreated'], comment, how_ticket_was_resolve)
+               firestore.UpdateResolvedTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Resolved", ticket['TechTransferTo'], ticket['DateCreated'], comment, how_ticket_was_resolve, ticket['OriginalLang'])
 
                firestore.DeleteEscalatedTickets(ticketID) 
                # update active count
                firestore.UpdateActiveCount(ticket['TechTransferTo'], "decrement")
                # update resolve count
                firestore.UpdateResolveCount(ticket['TechTransferTo'], "increment")
-
+               SendEmail("New Resolved Ticket", "atsdjangomain@gmail.com", ['atsdjango'+ticket['TechTransferTo']], ticketID, str(DateResponded), ticket['Caller'], "resolve")
                return redirect('/escalated/')
 
           elif button_action == 'transfer':
                TechComment = request.POST.get('TechComment')
                TechEscalatedTo = request.POST.get('selected_technician')
                ticket = firestore.GetEscalatedTicket(ticketID)
-               firestore.UpdateEscalatedTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Escalated", ticket['TechTransferTo'], TechEscalatedTo, ticket['DateCreated'], TechComment)
+               firestore.UpdateEscalatedTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Escalated", ticket['TechTransferTo'], techDisctionary2[TechEscalatedTo], ticket['DateCreated'], TechComment)
 
                # update active count
                firestore.UpdateActiveCount(ticket['TechTransferTo'], "decrement")
                firestore.UpdateActiveCount(techDisctionary2[TechEscalatedTo], "increment")
-               
+               SendEmail("New Transfered Ticket", "atsdjangomain@gmail.com", ['atsdjango'+TechEscalatedTo], ticketID, str(DateResponded), ticket['Caller'], "escalate")
                return redirect('/escalated/')
 
           elif button_action == 'auto_transfer':
@@ -349,6 +409,7 @@ def TechEscalatedTicketDetails(request, ticketID):
                               firestore.UpdateAutoEscalatedTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Escalated", ticket['TechTransferTo'], TechEscalatedTo, ticket['DateCreated'], TechComment)
                               firestore.UpdateActiveCount(ticket['TechTransferTo'], "decrement")
                               firestore.UpdateActiveCount(TechEscalatedTo, "increment")
+                              SendEmail("New Transfered Ticket", "atsdjangomain@gmail.com", ['atsdjango'+TechEscalatedTo], ticketID, str(DateResponded), ticket['Caller'], "escalate")
                               return redirect('/escalated/')
 
                return redirect('/escalated/')
@@ -356,12 +417,12 @@ def TechEscalatedTicketDetails(request, ticketID):
           elif button_action == 'request':
                request_message = request.POST.get('request_message')
                ticket = firestore.GetEscalatedTicket(ticketID)
-               firestore.UpdateAttentionRequiredTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Attention_Required", ticket['TechTransferTo'], ticket['DateCreated'], request_message)
+               firestore.UpdateAttentionRequiredTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Attention_Required", ticket['TechTransferTo'], ticket['DateCreated'], request_message, ticket['OriginalLang'])
                firestore.DeleteEscalatedTickets(ticketID)
 
                # update active count
                firestore.UpdateActiveCount(ticket['TechTransferTo'], "decrement")
-               
+               SendEmail("New Attention Needed Ticket", "atsdjangomain@gmail.com", ['atsdjango'+ticket['Caller']], ticketID, str(DateResponded), ticket['Caller'], "info")
                return redirect('/escalated/')
 
      
@@ -383,7 +444,7 @@ def TechReturnedTicketDetails(request, ticketID):
           
      if request.method == 'POST':
           button_action = request.POST.get('button_action')
-
+          DateResponded = date.today()
           if button_action == 'back':
                return redirect('/return/')
 
@@ -391,27 +452,27 @@ def TechReturnedTicketDetails(request, ticketID):
                how_ticket_was_resolve = request.POST.get('how_ticket_was_resolve')
                comment = request.POST.get('comment')
                ticket = firestore.DisplayAllReturnedTicket(ticketID)
-               firestore.UpdateResolvedTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Resolved", ticket['TechAssigned'], ticket['DateCreated'], comment, how_ticket_was_resolve)
+               firestore.UpdateResolvedTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Resolved", ticket['TechAssigned'], ticket['DateCreated'], comment, how_ticket_was_resolve, ticket['OriginalLang'])
 
                firestore.DeleteReturnedTickets(ticketID) 
                # update active count
                firestore.UpdateActiveCount(ticket['TechAssigned'], "decrement")
                # update resolve count
                firestore.UpdateResolveCount(ticket['TechAssigned'], "increment")
-
+               SendEmail("New Resolved Ticket", "atsdjangomain@gmail.com", ['atsdjango'+ticket['TechAssigned']], ticketID, str(DateResponded), ticket['Caller'], "resolve")
                return redirect('/return/')
 
           elif button_action == 'transfer':
                TechComment = request.POST.get('TechComment')
                TechEscalatedTo = request.POST.get('selected_technician')
                ticket = firestore.DisplayAllReturnedTicket(ticketID)
-               firestore.UpdateEscalatedTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Escalated", ticket['TechAssigned'], TechEscalatedTo, ticket['DateCreated'], TechComment)
+               firestore.UpdateEscalatedTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Escalated", ticket['TechAssigned'], techDisctionary2[TechEscalatedTo], ticket['DateCreated'], TechComment)
                firestore.DeleteReturnedTickets(ticketID)
 
                # update active count
                firestore.UpdateActiveCount(ticket['TechAssigned'], "decrement")
                firestore.UpdateActiveCount(techDisctionary2[TechEscalatedTo], "increment")
-               
+               SendEmail("New Transfered Ticket", "atsdjangomain@gmail.com", ['atsdjango'+techDisctionary2[TechEscalatedTo]], ticketID, str(DateResponded), ticket['Caller'], "escalate")
                return redirect('/return/')
 
           elif button_action == 'auto_transfer':
@@ -431,6 +492,7 @@ def TechReturnedTicketDetails(request, ticketID):
                               firestore.DeleteReturnedTickets(ticketID)
                               firestore.UpdateActiveCount(ticket['TechAssigned'], "decrement")
                               firestore.UpdateActiveCount(TechEscalatedTo, "increment")
+                              SendEmail("New Transfered Ticket", "atsdjangomain@gmail.com", ['atsdjango'+TechEscalatedTo], ticketID, str(DateResponded), ticket['Caller'], "escalate")
                               return redirect('/return/')
 
                return redirect('/return/')
@@ -438,12 +500,12 @@ def TechReturnedTicketDetails(request, ticketID):
           elif button_action == 'request':
                request_message = request.POST.get('request_message')
                ticket = firestore.DisplayAllReturnedTicket(ticketID)
-               firestore.UpdateAttentionRequiredTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Attention_Required", ticket['TechAssigned'], ticket['DateCreated'], request_message)
+               firestore.UpdateAttentionRequiredTable(ticket['id'], ticket['Caller'], ticket['Title'], ticket['Description'], "Attention_Required", ticket['TechAssigned'], ticket['DateCreated'], request_message, ticket['OriginalLang'])
                firestore.DeleteReturnedTickets(ticketID)
 
                # update active count
                firestore.UpdateActiveCount(ticket['TechAssigned'], "decrement")
-               
+               SendEmail("New Attention Needed Ticket", "atsdjangomain@gmail.com", ['atsdjango'+ticket['Caller']], ticketID, str(DateResponded), ticket['Caller'], "info")
                return redirect('/return/')
 
      
@@ -456,6 +518,36 @@ def TechReturnedTicketDetails(request, ticketID):
 # ========================================End Tech's Returned Ticket=======================================
 
 # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>End Technicians's Side<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+# >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>Start Admin's Side<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+# =============================================Start Admin Dashboard================================================
+
+def AdminDashboard(request):
+     
+     return render(request, 'base/admin_dashboard.html')
+
+# =============================================Start Admin Dashboard================================================
+
+# >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>End Admin's Side<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+# 1. Create active ticket count for each technician ==============DONE============
+# 2. Increament and decrement active ticket count accordingly ========DONE============
+# 3. Update db for additional fields like comment etc ==============DONE============
+# 4. Create table for all resolved tickets and how it was resolved ==============DONE============
+# 5. Create table for all pending tickets ==============DONE============
+# 6. User can re-submit tickets if problem was not solved ==============DONE============
+# 7. Escalate tickets *** ==============DONE============
+# 8 Translation ================DONE============
+# 9. Notify technician when ticket is assigned to them ==============DONE============
+# 10. Create reporting tool for admin ***
+
+# when a ticket is resubmitted, should add it on the pending ticket list for user
+# try to add an accept button for resolved page on user side
+
+# Pending tickets -> Resolved, Request, transfer, auto-transfer
+# Returned tickets -> Resolved, Request, transfer, auto-transfer
+# Escalated tickets -> Resolved, request, transfer, auto-transfer
 
 caller = None
 ticketID = ''
@@ -502,20 +594,84 @@ techDisctionary2 = {
      "GRP_7": "tech7@gmail.com",
 }
 
-# 1. Create active ticket count for each technician ==============DONE============
-# 2. Increament and decrement active ticket count accordingly ========DONE============
-# 3. Update db for additional fields like comment etc ==============DONE============
-# 4. Create table for all resolved tickets and how it was resolved ==============DONE============
-# 5. Create table for all pending tickets ==============DONE============
-# 6. User can re-submit tickets if problem was not solved ==============DONE============
-# 7. Escalate tickets *** ==============DONE============
-# 9. Notify technician when ticket is assigned to them
-# 10 Translation
-# 8. Create reporting tool for admin ***
+def SendEmail(subject, from_email, recipient_list, ticketID, date, caller, type):
 
-# when a ticket is resubmitted, shouyld add it on the pending ticket list for user
-# try to add an accept button for resolved page on user side
+     recipient_email_address = recipient_list[0].replace("atsdjango", "").replace("@gmail.com", "")
 
-# Pending tickets -> Resolved, Request, transfer, auto-transfer
-# Returned tickets -> Resolved, Request, transfer, auto-transfer
-# Escalated tickets -> Resolved, request, transfer, auto-transfer
+     if type == 'create':
+          full_email = '''Dear ''' + recipient_email_address + ''',
+
+This is to inform you that a new ticket has been assigned to you. Please find the details below:
+
+Ticket ID: ''' + ticketID + '''
+Date Assigned: ''' + date + '''
+
+Your prompt attention to this ticket is greatly appreciated. Kindly review the details and take the necessary actions to assist the requester.
+
+Thank you for your assistance.
+
+Best regards,
+ATS Admin'''
+                          
+     elif type == 'escalate':                     
+          full_email = '''Dear ''' + recipient_email_address + ''',
+
+This is to inform you that a new ticket has been transfered to you. Please find the details below:
+
+Ticket ID: ''' + ticketID + '''
+Date Assigned: ''' + date + '''
+
+Your prompt attention to this ticket is greatly appreciated. Kindly review the details and take the necessary actions to assist the requester.
+
+Thank you for your assistance.
+
+Best regards,
+ATS Admin'''
+
+     elif type == 'respond':
+          full_email = '''Dear ''' + recipient_email_address + ''',
+
+This is to inform you that a ticket has been responded by user ''' + caller + '''. Please find the details below:
+
+Ticket ID: ''' + ticketID + '''
+Date Responded: ''' + date + '''
+
+Your prompt attention to this ticket is greatly appreciated. Kindly review the details and take the necessary actions to assist the requester.
+
+Thank you for your assistance.
+
+Best regards,
+ATS Admin'''
+                          
+     elif type == 'resolve':
+          full_email = '''Dear ''' + recipient_email_address + ''',
+
+This is to inform you that your ticket with ID: ''' + ticketID + ''' has been resolved.
+
+Kindly review the details and take the necessary actions provided by the technician.
+
+Thank you for your comprehension.
+
+Best regards,
+ATS Admin'''
+
+     elif type == 'info':
+          full_email = '''Dear ''' + recipient_email_address + ''',
+
+This is to inform you that your ticket with ID: ''' + ticketID + ''' is on hold.
+
+Kindly review the details and provide the necessary information asked by the technician.
+
+Thank you for your comprehension.
+
+Best regards,
+ATS Admin'''
+     
+     # Create an EmailMessage instance
+     email = EmailMessage(subject, full_email, from_email, recipient_list)
+
+     # # Attach files or additional content (optional)
+     # email.attach_file('/path/to/attachment.pdf')
+
+     # Send the email
+     email.send()
